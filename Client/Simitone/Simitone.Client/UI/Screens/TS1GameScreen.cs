@@ -1,4 +1,4 @@
-﻿
+
 using FSO.Client;
 using FSO.Client.Debug;
 using FSO.Client.UI.Controls;
@@ -28,6 +28,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Simitone.Client.UI.Controls;
 using Simitone.Client.UI.Panels;
+using Simitone.Client.UI.Panels.Options;
 using Simitone.Client.UI.Panels.WorldUI;
 using Simitone.Client.Utils;
 using System;
@@ -56,6 +57,7 @@ namespace Simitone.Client.UI.Screens
         //for TS1 hybrid mode
         public UINeighborhoodSelectionPanel TS1NeighPanel;
         public FAMI ActiveFamily;
+        private ushort CurrentNeighborhoodMode = 4; // default to Normal/Old Town
 
         public bool InLot
         {
@@ -172,6 +174,16 @@ namespace Simitone.Client.UI.Screens
             }
         }
 
+        private ushort GetNeighborhoodModeFromHouse(short house)
+        {
+            // House number ranges match the lot types
+            if (house >= 21 && house <= 31) return 2;  // Downtown
+            else if (house >= 40 && house <= 49) return 3;  // Vacation
+            else if (house >= 81 && house <= 90) return 5;  // Studiotown
+            else if (house >= 90 && house <= 99) return 7;  // Magictown
+            else return 4;  // Normal/Old Town (default)
+        }
+
         public TS1GameScreen(NeighSelectionMode mode) : base()
         {
             Bg = new UISimitoneBg();
@@ -195,11 +207,16 @@ namespace Simitone.Client.UI.Screens
 
         public void NeighSelection(NeighSelectionMode mode)
         {
+            var nbd = (ushort)((mode == NeighSelectionMode.MoveInMagic) ? 7 : 4);
+            NeighSelection(nbd, mode != NeighSelectionMode.Normal);
+        }
+
+        public void NeighSelection(ushort neighborhoodMode, bool moveInMode = false)
+        {
             Content.Get().Neighborhood.PreparePersonDataFromObject = PersonGeneratorHelper.PreparePersonDataFromObject;
             Content.Get().Neighborhood.AddMissingNeighbors();
-            var nbd = (ushort)((mode == NeighSelectionMode.MoveInMagic) ? 7 : 4);
-            TS1NeighPanel = new UINeighborhoodSelectionPanel(nbd);
-            var switcher = new UINeighbourhoodSwitcher(TS1NeighPanel, nbd, mode != NeighSelectionMode.Normal);
+            TS1NeighPanel = new UINeighborhoodSelectionPanel(neighborhoodMode);
+            var switcher = new UINeighbourhoodSwitcher(TS1NeighPanel, neighborhoodMode, moveInMode);
             TS1NeighPanel.OnHouseSelect += (house) =>
             {
                 if (MoveInFamily != null)
@@ -232,6 +249,7 @@ namespace Simitone.Client.UI.Screens
         public void PlayHouse(short house, UIElement switcher)
         {
             ActiveFamily = Content.Get().Neighborhood.GetFamilyForHouse((short)house);
+            CurrentNeighborhoodMode = GetNeighborhoodModeFromHouse(house);
             InitializeLot(Content.Get().Neighborhood.GetHousePath(house), false);// "UserData/Houses/House21.iff"
             Remove(TS1NeighPanel);
             if (switcher != null) Remove(switcher);
@@ -239,15 +257,19 @@ namespace Simitone.Client.UI.Screens
 
         public void MoveInAndPlay(short house, int family, UIElement switcher)
         {
-            MoveInFamily = null;
             var neigh = Content.Get().Neighborhood;
+            if (family < 0 || family > ushort.MaxValue) return;
             var fami = neigh.GetFamily((ushort)family);
+            if (fami == null || fami.HouseNumber != 0 || neigh.GetFamilyForHouse(house) != null) return;
+            MoveInFamily = null;
             neigh.SetFamilyForHouse(house, fami, true);
             PlayHouse(house, switcher);
         }
 
         public void EvictLot(FAMI family, short houseID)
         {
+            var neigh = Content.Get().Neighborhood;
+            if (family == null || family.HouseNumber != houseID || !ReferenceEquals(neigh.GetFamilyForHouse(houseID), family)) return;
             family.Budget += family.ValueInArch;
             family.ValueInArch = 0;
             Content.Get().Neighborhood.MoveOut(houseID);
@@ -277,7 +299,7 @@ namespace Simitone.Client.UI.Screens
             //2 speed is 3x
             //3 speed is 10x
 
-            if (vm == null) return;
+            if (vm == null || OptionsDialog != null) return;
             if (vm.SpeedMultiplier == -1) return;
 
             switch (vm.SpeedMultiplier)
@@ -349,7 +371,7 @@ namespace Simitone.Client.UI.Screens
             if (state.NewKeys.Contains(Keys.D2)) ChangeSpeedTo(2);
             if (state.NewKeys.Contains(Keys.D3)) ChangeSpeedTo(3);
             if (state.NewKeys.Contains(Keys.P)) ChangeSpeedTo(0);
-            if (state.NewKeys.Contains(Keys.D0))
+            if (OptionsDialog == null && state.NewKeys.Contains(Keys.D0))
             {
                 //frame advance
                 ChangeSpeedTo(1);
@@ -766,6 +788,16 @@ namespace Simitone.Client.UI.Screens
             }
         }
 
+        private UIOptionsAlert OptionsDialog;
+
+        public void ShowOptionsDialog()
+        {
+            if (OptionsDialog != null) return;
+            OptionsDialog = new UIOptionsAlert(GlobalSettings.Default);
+            OptionsDialog.Closed += () => OptionsDialog = null;
+            UIScreen.GlobalShowDialog(OptionsDialog, true);
+        }
+
         private UIMobileAlert CloseAlert;
         public override bool CloseAttempt()
         {
@@ -775,15 +807,15 @@ namespace Simitone.Client.UI.Screens
             {
                 if (CloseAlert == null)
                 {
-                    var canSave = vm != null;
+                    var canSave = CanSave;
                     CloseAlert = new UIMobileAlert(new FSO.Client.UI.Controls.UIAlertOptions
                     {
                         Title = GameFacade.Strings.GetString("153", "1"), //quit?
-                        Message = GameFacade.Strings.GetString("153", canSave?"6":"2"), //are you sure (2), save before quitting (3)
+                        Message = Downtown ? "This trip cannot be saved. Quit and discard progress since the last home save?" : GameFacade.Strings.GetString("153", canSave?"6":"2"), //are you sure (2), save before quitting (3)
                         Buttons = 
                         canSave?
                         UIAlertButton.YesNoCancel(
-                            (b) => { Save(); GameFacade.Game.Exit(); },
+                            (b) => { if (Save()) GameFacade.Game.Exit(); },
                             (b) => { GameFacade.Game.Exit(); },
                             (b) => { CloseAlert.Close(); CloseAlert = null; }
                             )
@@ -806,10 +838,12 @@ namespace Simitone.Client.UI.Screens
                 CloseAlert = new UIMobileAlert(new FSO.Client.UI.Controls.UIAlertOptions
                 {
                     Title = GameFacade.Strings.GetString("153", "3"), //save
-                    Message = GameFacade.Strings.GetString("153", "4"), //Do you want to save the game?
-                    Buttons =
+                    Message = Downtown ? "This trip cannot be saved. Return to the neighborhood and discard progress since the last home save?" : GameFacade.Strings.GetString("153", "4"),
+                    Buttons = !CanSave ? UIAlertButton.YesNo(
+                        b => { ExitLot(); CloseAlert.Close(); CloseAlert = null; },
+                        b => { CloseAlert.Close(); CloseAlert = null; }) :
                     UIAlertButton.YesNoCancel(
-                        (b) => { Save(); ExitLot(); CloseAlert.Close(); CloseAlert = null; },
+                        (b) => { if (!Save()) return; ExitLot(); CloseAlert.Close(); CloseAlert = null; },
                         (b) => { ExitLot(); CloseAlert.Close(); CloseAlert = null; },
                         (b) => { CloseAlert.Close(); CloseAlert = null; }
                         )
@@ -818,46 +852,74 @@ namespace Simitone.Client.UI.Screens
             }
         }
 
-        public void Save()
+        public bool CanSave => vm != null && !Downtown;
+
+        public bool Save()
         {
-            //save the house first
-            var iff = new IffFile();
-            vm.TS1State.UpdateSIMI(vm);
-            var marshal = vm.Save();
-            var fsov = new FSOV();
-            fsov.ChunkLabel = "Simitone Lot Data";
-            fsov.ChunkID = 1;
-            fsov.ChunkProcessed = true;
-            fsov.ChunkType = "FSOV";
-            fsov.AddedByPatch = true;
-
-            using (var stream = new MemoryStream())
+            if (!CanSave) return false;
+            try
             {
-                marshal.SerializeInto(new BinaryWriter(stream));
-                fsov.Data = stream.ToArray();
+                //save the house first
+                var iff = new IffFile();
+                vm.TS1State.UpdateSIMI(vm);
+                var marshal = vm.Save();
+                var fsov = new FSOV();
+                fsov.ChunkLabel = "Simitone Lot Data";
+                fsov.ChunkID = 1;
+                fsov.ChunkProcessed = true;
+                fsov.ChunkType = "FSOV";
+                fsov.AddedByPatch = true;
+
+                using (var stream = new MemoryStream())
+                {
+                    marshal.SerializeInto(new BinaryWriter(stream));
+                    fsov.Data = stream.ToArray();
+                }
+
+                iff.AddChunk(fsov);
+
+                var simi = vm.TS1State.SimulationInfo;
+                simi.ChunkProcessed = true;
+                simi.AddedByPatch = true;
+                iff.AddChunk(simi);
+
+                Texture2D roofless = null;
+                var thumb = World.GetLotThumb(GameFacade.GraphicsDevice, (tex) => roofless = FSO.Common.Utils.TextureUtils.Decimate(tex, GameFacade.GraphicsDevice, 2, false));
+                thumb = FSO.Common.Utils.TextureUtils.Decimate(thumb, GameFacade.GraphicsDevice, 2, false);
+
+                var tPNG = GeneratePNG(thumb);
+                tPNG.ChunkID = 513;
+                iff.AddChunk(tPNG);
+
+                var rPNG = GeneratePNG(roofless);
+                rPNG.ChunkID = 512;
+                iff.AddChunk(rPNG);
+
+                Content.Get().Neighborhood.SaveHouse(vm.GetGlobalValue(10), iff);
+                Content.Get().Neighborhood.SaveNeighbourhood(true);
+                return true;
             }
+            catch (IOException e)
+            {
+                ShowSaveError(e.Message);
+            }
+            catch (UnauthorizedAccessException e)
+            {
+                ShowSaveError(e.Message);
+            }
+            return false;
+        }
 
-            iff.AddChunk(fsov);
-
-            var simi = vm.TS1State.SimulationInfo;
-            simi.ChunkProcessed = true;
-            simi.AddedByPatch = true;
-            iff.AddChunk(simi);
-
-            Texture2D roofless = null;
-            var thumb = World.GetLotThumb(GameFacade.GraphicsDevice, (tex) => roofless = FSO.Common.Utils.TextureUtils.Decimate(tex, GameFacade.GraphicsDevice, 2, false));
-            thumb = FSO.Common.Utils.TextureUtils.Decimate(thumb, GameFacade.GraphicsDevice, 2, false);
-
-            var tPNG = GeneratePNG(thumb);
-            tPNG.ChunkID = 513;
-            iff.AddChunk(tPNG);
-
-            var rPNG = GeneratePNG(roofless);
-            rPNG.ChunkID = 512;
-            iff.AddChunk(rPNG);
-
-            Content.Get().Neighborhood.SaveHouse(vm.GetGlobalValue(10), iff);
-            Content.Get().Neighborhood.SaveNeighbourhood(true);
+        private void ShowSaveError(string message)
+        {
+            UIMobileAlert alert = null;
+            alert = new UIMobileAlert(new UIAlertOptions
+            {
+                Title = "Unable to save",
+                Message = message + "\nThe game is still open. Fix the save destination and try again.",
+                Buttons = UIAlertButton.Ok(b => alert.Close())
+            });
+            UIScreen.GlobalShowDialog(alert, true);
         }
 
         public PNG GeneratePNG(Texture2D data)
@@ -880,7 +942,7 @@ namespace Simitone.Client.UI.Screens
         public void ExitLot()
         {
             CleanupLastWorld();
-            NeighSelection(NeighSelectionMode.Normal);
+            NeighSelection(CurrentNeighborhoodMode);
             Downtown = false;
             SavedLot = null;
         }

@@ -1,8 +1,9 @@
-﻿using FSO.Client;
+using FSO.Client;
 using FSO.Common;
 using FSO.LotView;
 using Simitone.Client;
 using Simitone.Windows.GameLocator;
+using Simitone.Windows.UI;
 using Simitone.Windows.Utils;
 using System;
 using System.Drawing;
@@ -12,7 +13,11 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Windows.Forms;
+using Eto.Forms;
+using Application = Eto.Forms.Application;
+using DialogResult = Eto.Forms.DialogResult;
+using MessageBox = Eto.Forms.MessageBox;
+using MessageBoxButtons = Eto.Forms.MessageBoxButtons;
 
 namespace Simitone.Windows
 {
@@ -45,7 +50,8 @@ namespace Simitone.Windows
                 gameLocator = new WindowsLocator();
 
             var useDX = !linux;
-            var path = gameLocator.FindTheSims1();
+            string path = null;
+            bool pathProvidedViaCommandLine = false;
 
 
             FSOEnvironment.Enable3D = false;
@@ -99,12 +105,191 @@ namespace Simitone.Windows
                                 break;
                             case string s when s.StartsWith("path"): //The Sims path
                                 path = s.Length > 4 ? s.Substring(4).Trim('"').Replace('\\', '/') + "/" : path;
+                                pathProvidedViaCommandLine = true;
                                 break;
                         }
                     }
                 }
             }
             #endregion
+
+            // Set FSOEnvironment.UserDir early so GlobalSettings can load correctly
+            if (!linux)
+            {
+                FSOEnvironment.UserDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Simitone/").Replace('\\', '/');
+                Directory.CreateDirectory(FSOEnvironment.UserDir);
+            }
+
+            // If no path provided via command line, check if we need to configure installation
+            if (!pathProvidedViaCommandLine && !linux)
+            {
+                var windowsLocator = gameLocator as WindowsLocator;
+                if (windowsLocator != null)
+                {
+                    // Check if installation has already been configured
+                    if (!GlobalSettings.Default.TS1InstallationConfigured)
+                    {
+                        // First time setup - show installation selector
+                        var installations = windowsLocator.GetAllTheSims1Installations();
+                        
+                        if (installations.Count == 0)
+                        {
+                            // No installations found - show empty selector so user can browse
+                            var app = new Application(Eto.Platform.Detect);
+                            var dialog = new InstallationSelectorDialog(new System.Collections.Generic.List<InstallationInfo>());
+                            var result = dialog.ShowModal();
+
+                            if (result != null)
+                            {
+                                // Normalize path - ensure it ends with /
+                                path = result.Path.Replace('\\', '/');
+                                if (!path.EndsWith("/")) path += "/";
+                                SaveInstallationConfig(path, result.IsSteam);
+                                
+                                // Show info dialog
+                                string savesPath = result.IsSteam
+                                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                                 "Saved Games", "Electronic Arts", "The Sims 25", "UserData")
+                                    : Path.Combine(result.Path, "UserData");
+                                string simitoneSavesPath = Path.Combine(FSOEnvironment.UserDir, "UserData");
+                                
+                                var infoDialog = new InstallationInfoDialog(path, savesPath, simitoneSavesPath, result.IsSteam);
+                                infoDialog.ShowModal();
+                            }
+                            else
+                            {
+                                // User cancelled
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            // Installations found - continue with existing logic
+                        
+                            // Check if user already has Simitone saves
+                        bool hasExistingSaves = Directory.Exists(Path.Combine(FSOEnvironment.UserDir, "UserData/"));
+                        if (hasExistingSaves)
+                        {
+                            var app = new Application(Eto.Platform.Detect);
+                            var result = MessageBox.Show(
+                                "Existing Simitone save data was detected.\n\n" +
+                                "If you select a different installation type than before, your saves may not be compatible.\n\n" +
+                                "Do you want to continue with installation selection?",
+                                "Existing Saves Detected",
+                                MessageBoxButtons.YesNo,
+                                MessageBoxType.Warning
+                            );
+                            
+                            if (result == DialogResult.No)
+                            {
+                                return;
+                            }
+                        }
+                        
+                        if (installations.Count == 1)
+                        {
+                            // Only one installation found, use it automatically
+                            path = installations[0].path;
+                            bool isSteam = installations[0].type == TS1InstallationType.Steam;
+                            if (isSteam && !CheckSteamSavesExist()) return;
+                            SaveInstallationConfig(path, isSteam);
+                            
+                            // Show info dialog
+                            string savesPath = isSteam
+                                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                             "Saved Games", "Electronic Arts", "The Sims 25", "UserData")
+                                : Path.Combine(path, "UserData");
+                            string simitoneSavesPath = Path.Combine(FSOEnvironment.UserDir, "UserData");
+                            
+                            var app = new Application(Eto.Platform.Detect);
+                            var infoDialog = new InstallationInfoDialog(path, savesPath, simitoneSavesPath, isSteam);
+                            infoDialog.ShowModal();
+                        }
+                        else
+                        {
+                            // Multiple installations, show selector
+                            var installInfos = installations
+                                .Select(i => new InstallationInfo(i.description, i.path, i.type))
+                                .ToList();
+
+                            var app = new Application(Eto.Platform.Detect);
+                            var dialog = new InstallationSelectorDialog(installInfos);
+                            var result = dialog.ShowModal();
+
+                            if (result != null)
+                            {
+                                // Normalize path - ensure it ends with /
+                                path = result.Path.Replace('\\', '/');
+                                if (!path.EndsWith("/")) path += "/";
+                                if (result.IsSteam && !CheckSteamSavesExist()) return;
+                                SaveInstallationConfig(path, result.IsSteam);
+
+                                // Show info dialog using the existing app instance
+                                string savesPath = result.IsSteam
+                                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                                 "Saved Games", "Electronic Arts", "The Sims 25", "UserData")
+                                    : Path.Combine(result.Path, "UserData");
+                                string simitoneSavesPath = Path.Combine(FSOEnvironment.UserDir, "UserData");
+
+                                var infoDialog = new InstallationInfoDialog(path, savesPath, simitoneSavesPath, result.IsSteam);
+                                infoDialog.ShowModal();
+                            }
+                            else
+                            {
+                                // User cancelled
+                                return;
+                            }
+                        }
+                        }
+                    }
+                    else
+                    {
+                        // Already configured, use saved settings
+                        path = GlobalSettings.Default.TS1HybridPath;
+
+                        // For Steam installs, check that save data exists before proceeding.
+                        // Also need an Application instance for any MessageBox that may follow.
+                        var configuredApp = new Application(Eto.Platform.Detect);
+
+                        if (GlobalSettings.Default.TS1IsSteamInstall && !CheckSteamSavesExist()) return;
+
+                        // Validate the path still exists
+                        if (!Directory.Exists(path) || !File.Exists(Path.Combine(path, "GameData", "Behavior.iff")))
+                        {
+                            var result = MessageBox.Show(
+                                $"The configured installation path is no longer valid:\n{path}\n\n" +
+                                "Would you like to reconfigure your installation?\n\n" +
+                                "Click Yes to select a new installation, or No to exit.",
+                                "Installation Not Found",
+                                MessageBoxButtons.YesNo,
+                                MessageBoxType.Warning
+                            );
+                            
+                            if (result == DialogResult.Yes)
+                            {
+                                // Reset configuration and restart the detection
+                                GlobalSettings.Default.TS1InstallationConfigured = false;
+                                GlobalSettings.Default.Save();
+                                
+                                MessageBox.Show(
+                                    "Configuration has been reset. Please restart Simitone to select your installation.",
+                                    "Configuration Reset",
+                                    MessageBoxType.Information
+                                );
+                            }
+                            
+                            return;
+                        }
+                    }
+                }
+            }
+            
+            // If still no path (Linux or other edge case), try to detect
+            if (path == null)
+            {
+                path = gameLocator.FindTheSims1();
+            }
+
             useDX = MonogameLinker.Link(useDX);
 
             FSO.Files.ImageLoaderHelpers.BitmapFunction = BitmapReader;
@@ -117,22 +302,36 @@ namespace Simitone.Windows
             {
                 FSOEnvironment.ContentDir = "Content/";
                 FSOEnvironment.GFXContentDir = "Content/" + (useDX ? "DX/" : "OGL/");
-                FSOEnvironment.UserDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Simitone/").Replace('\\', '/');
-                Directory.CreateDirectory(FSOEnvironment.UserDir);
+                // FSOEnvironment.UserDir already set earlier for Windows
                 FSOEnvironment.Linux = false;
                 FSOEnvironment.DirectX = useDX;
                 FSOEnvironment.GameThread = Thread.CurrentThread;
                 if (GlobalSettings.Default.LanguageCode == 0) GlobalSettings.Default.LanguageCode = 1;
                 FSO.Files.Formats.IFF.Chunks.STR.DefaultLangCode = (FSO.Files.Formats.IFF.Chunks.STRLangCode)GlobalSettings.Default.LanguageCode;
 
+                // Set runtime settings (these may have been set during first-time config or command line)
+                if (pathProvidedViaCommandLine && gameLocator is WindowsLocator explicitLocator)
+                {
+                    // Match the existing locator; custom paths follow the selector's portable-install default.
+                    var installation = explicitLocator.GetAllTheSims1Installations().FirstOrDefault(i =>
+                        string.Equals(Path.GetFullPath(i.path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                            Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase));
+                    GlobalSettings.Default.TS1IsSteamInstall = installation.type == TS1InstallationType.Steam;
+                    if (GlobalSettings.Default.TS1IsSteamInstall && !CheckSteamSavesExist()) return;
+                }
                 GlobalSettings.Default.StartupPath = path;
-                GlobalSettings.Default.TS1HybridEnable = true;
                 GlobalSettings.Default.TS1HybridPath = path;
+                
+                GlobalSettings.Default.TS1HybridEnable = true;
+                FSO.Content.Content.TS1SteamInstall = GlobalSettings.Default.TS1IsSteamInstall;
                 GlobalSettings.Default.ClientVersion = "0";
                 GlobalSettings.Default.LightingMode = 3;
                 GlobalSettings.Default.AntiAlias = aa ? 1 : 0;
                 GlobalSettings.Default.ComplexShaders = true;
                 GlobalSettings.Default.EnableTransitions = true;
+
+                // Save the updated settings to config.ini
+                GlobalSettings.Default.Save();
 
                 if (ide) new FSO.IDE.VolcanicStartProxy().InitVolcanic(args);
 
@@ -251,6 +450,51 @@ namespace Simitone.Windows
             }
 
             return newBmp;
+        }
+
+        /// <summary>
+        /// Save installation configuration to settings
+        /// </summary>
+        private static void SaveInstallationConfig(string path, bool isSteam)
+        {
+            GlobalSettings.Default.TS1HybridPath = path;
+            GlobalSettings.Default.TS1IsSteamInstall = isSteam;
+            GlobalSettings.Default.TS1InstallationConfigured = true;
+            GlobalSettings.Default.StartupPath = path;
+            GlobalSettings.Default.Save();
+        }
+
+        /// <summary>
+        /// Returns the path where the Steam Legacy Collection saves UserData, or null if it doesn't exist.
+        /// The folder is only created after the user has launched the game and loaded a family at least once.
+        /// </summary>
+        private static string GetSteamSavesPath(string udName = "UserData")
+        {
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Saved Games", "Electronic Arts", "The Sims 25", udName
+            );
+        }
+
+        /// <summary>
+        /// Shows an error if the Steam saves directory doesn't exist yet.
+        /// Returns true if it's safe to proceed, false if the user needs to run the Steam game first.
+        /// </summary>
+        private static bool CheckSteamSavesExist()
+        {
+            var savesPath = GetSteamSavesPath();
+            if (Directory.Exists(savesPath)) return true;
+
+            MessageBox.Show(
+                "The Sims: Legacy Collection save data was not found.\n\n" +
+                "Expected location:\n" + savesPath + "\n\n" +
+                "This folder is only created after launching The Sims: Legacy\n" +
+                "Collection via Steam and loading a family at least once.\n\n" +
+                "Please do that first, then restart Simitone.",
+                "Steam Save Data Not Found",
+                MessageBoxType.Error
+            );
+            return false;
         }
     }
 #endif

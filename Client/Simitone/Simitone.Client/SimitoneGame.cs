@@ -1,4 +1,4 @@
-﻿/*
+/*
 This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 If a copy of the MPL was not distributed with this file, You can obtain one at
 http://mozilla.org/MPL/2.0/.
@@ -23,6 +23,7 @@ using FSO.SimAntics;
 using MSDFData;
 using FSO.LotView.Model;
 using Simitone.Client.UI.Panels;
+using System.IO;
 
 namespace Simitone.Client
 {
@@ -47,11 +48,13 @@ namespace Simitone.Client
             FSOEnvironment.TexCompress = false;
             UILotControl.ShowSimanticsExceptions = !FSOEnvironment.Args.Contains("nosimantics-exc");
 
+            FSOEnvironment.DPIScaleFactor = GlobalSettings.Default.DPIScaleFactor;
+
             if (!FSOEnvironment.SoftwareKeyboard)
             {
                 Graphics.SynchronizeWithVerticalRetrace = true;
-                Graphics.PreferredBackBufferWidth = GlobalSettings.Default.GraphicsWidth;
-                Graphics.PreferredBackBufferHeight = GlobalSettings.Default.GraphicsHeight;
+                Graphics.PreferredBackBufferWidth = (int)(GlobalSettings.Default.GraphicsWidth * FSOEnvironment.DPIScaleFactor);
+                Graphics.PreferredBackBufferHeight = (int)(GlobalSettings.Default.GraphicsHeight * FSOEnvironment.DPIScaleFactor);
                 Graphics.HardwareModeSwitch = false;
                 Graphics.ApplyChanges();
             }
@@ -61,12 +64,18 @@ namespace Simitone.Client
 
             Thread.CurrentThread.Name = "Game";
 
+            // Set window icon early for Linux/macOS (Windows uses Icon.ico from project settings)
+            // This needs to happen before the window is shown for some window managers
+            if (GameFacade.Linux)
+            {
+                SetWindowIcon();
+            }
         }
 
         bool newChange = false;
         void Window_ClientSizeChanged(object sender, EventArgs e)
         {
-            if (newChange || !GlobalSettings.Default.Windowed || FSOEnvironment.SoftwareKeyboard) return;
+            if (newChange || !GlobalSettings.Default.Windowed) return;
             if (Window.ClientBounds.Width == 0 || Window.ClientBounds.Height == 0) return;
             newChange = true;
             var width = Math.Max(1, Window.ClientBounds.Width);
@@ -81,7 +90,9 @@ namespace Simitone.Client
             newChange = false;
             if (uiLayer?.CurrentUIScreen == null) return;
 
-            uiLayer.SpriteBatch.ResizeBuffer(GlobalSettings.Default.GraphicsWidth, GlobalSettings.Default.GraphicsHeight);
+            uiLayer.SpriteBatch.ResizeBuffer(width, height);
+            GlobalSettings.Default.GraphicsWidth = (int)(width / FSOEnvironment.DPIScaleFactor);
+            GlobalSettings.Default.GraphicsHeight = (int)(height / FSOEnvironment.DPIScaleFactor);
             uiLayer.CurrentUIScreen.GameResized();
         }
 
@@ -133,6 +144,10 @@ namespace Simitone.Client
             if (FSOEnvironment.Enable3D) FSO.Files.RC.DGRP3DMesh.InitRCWorkers();
             //FSO.Content.Content.Init(GlobalSettings.Default.StartupPath, GraphicsDevice);
             FSO.SimAntics.VMAvatar.MissingIconProvider = Simitone.Client.UI.Model.UIIconCache.GetObject;
+            
+            // Initialize Free Will setting from config
+            VM.FreeWillEnabled = GlobalSettings.Default.TS1FreeWill;
+            
             base.Initialize();
 
             GameFacade.GameThread = Thread.CurrentThread;
@@ -155,11 +170,7 @@ namespace Simitone.Client
 
             //init audio now
             HITVM.Init();
-            var hit = HITVM.Get();
-            hit.SetMasterVolume(HITVolumeGroup.FX, GlobalSettings.Default.FXVolume / 10f);
-            hit.SetMasterVolume(HITVolumeGroup.MUSIC, GlobalSettings.Default.MusicVolume / 10f);
-            hit.SetMasterVolume(HITVolumeGroup.VOX, GlobalSettings.Default.VoxVolume / 10f);
-            hit.SetMasterVolume(HITVolumeGroup.AMBIENCE, GlobalSettings.Default.AmbienceVolume / 10f);
+            ApplyAudioOptions();
 
             ContentStrings.TS1 = true;
             GameFacade.Strings = new ContentStrings();
@@ -183,10 +194,26 @@ namespace Simitone.Client
             base.Screen.Layers.Add(uiLayer);
             GameFacade.LastUpdateState = base.Screen.State;
 
+            // Try setting icon again after full initialization (for window managers that need it)
+            if (GameFacade.Linux)
+            {
+                SetWindowIcon();
+            }
+
             if (!GlobalSettings.Default.Windowed && !GameFacade.GraphicsDeviceManager.IsFullScreen)
             {
                 GameFacade.GraphicsDeviceManager.ToggleFullScreen();
             }
+        }
+
+        internal void ApplyAudioOptions()
+        {
+            var hit = HITVM.Get();
+            if (hit == null || FSOEnvironment.NoSound) return;
+            hit.SetMasterVolume(HITVolumeGroup.FX, GlobalSettings.Default.FXVolume / 10f);
+            hit.SetMasterVolume(HITVolumeGroup.MUSIC, GlobalSettings.Default.MusicVolume / 10f);
+            hit.SetMasterVolume(HITVolumeGroup.VOX, GlobalSettings.Default.VoxVolume / 10f);
+            hit.SetMasterVolume(HITVolumeGroup.AMBIENCE, GlobalSettings.Default.AmbienceVolume / 10f);
         }
 
         private void SaveGraphicsModePreference(GlobalGraphicsMode obj)
@@ -219,6 +246,67 @@ namespace Simitone.Client
         void LostFocus(object sender, EventArgs e)
         {
             GameFacade.Focus = false;
+        }
+
+        /// <summary>
+        /// Sets the window icon for Linux/macOS platforms.
+        /// Attempts to load Icon.bmp from multiple locations.
+        /// </summary>
+        void SetWindowIcon()
+        {
+            try
+            {
+                // Get window handle using reflection (MonoGame DesktopGL)
+                var handleProperty = this.Window.GetType().GetProperty("Handle");
+                if (handleProperty == null)
+                {
+                    Console.WriteLine("Warning: Could not get window handle for icon");
+                    return;
+                }
+
+                var windowHandle = (IntPtr)handleProperty.GetValue(this.Window);
+                if (windowHandle == IntPtr.Zero)
+                {
+                    Console.WriteLine("Warning: Window handle is null");
+                    return;
+                }
+
+                // Try to find Icon.bmp in common locations
+                string iconPath = null;
+                var possiblePaths = new[]
+                {
+                    "Icon.bmp",                    // Current directory
+                    "Resources/Icon.bmp",          // Resources subdirectory
+                    "../Icon.bmp",                 // Parent directory
+                    "../Resources/Icon.bmp",       // Parent Resources subdirectory
+                    "../../Icon.bmp",              // Two levels up
+                    "../../../Icon.bmp",           // Three levels up
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Icon.bmp"),
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "Icon.bmp")
+                };
+
+                foreach (var path in possiblePaths)
+                {
+                    if (File.Exists(path))
+                    {
+                        iconPath = path;
+                        break;
+                    }
+                }
+
+                if (iconPath != null)
+                {
+                    Simitone.Client.Utils.IconLoader.SetWindowIcon(windowHandle, iconPath);
+                }
+                else
+                {
+                    Console.WriteLine("Warning: Icon.bmp not found in any expected location");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: Failed to set window icon: {ex.Message}");
+            }
         }
 
         /// <summary>

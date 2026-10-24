@@ -11,6 +11,10 @@ NOTE! Currently does not support the entire Fame career track, saving on vacatio
 
 *Only for Desktop Windows.* Other platforms cannot be officially supported.
 
+# Everyday gameplay development branch
+
+This branch adds guarded saves, household stale-state checks, draft-based audio/display options and ordinary community-destination selection. The package-free checks pass on Linux; Windows gameplay and original-game compatibility remain unverified. Full eviction cleanup and robust home-snapshot restore work are still pending. See [implementation results and remaining work](docs/testing/release-1-results.md) and the [manual test matrix](docs/testing/everyday-gameplay-matrix.md).
+
 # Purpose
 
 On modern operating systems, The Sims has a few nagging issues that make it less than playable. Simitone can be seen as a tool to improve the playability of your existing installation of The Sims. Here are some features:

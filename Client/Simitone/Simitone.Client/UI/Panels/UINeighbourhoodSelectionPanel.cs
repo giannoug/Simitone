@@ -1,4 +1,4 @@
-﻿using FSO.Client.UI.Controls;
+using FSO.Client.UI.Controls;
 using FSO.Client.UI.Framework;
 using FSO.Common.Rendering.Framework.IO;
 using FSO.Content.Framework;
@@ -6,6 +6,7 @@ using FSO.Content.Model;
 using FSO.Files.Formats.IFF.Chunks;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -124,10 +125,20 @@ namespace Simitone.Client.UI.Panels
             }
         }
 
-        public UINeighborhoodSelectionPanel(ushort mode)
+        private readonly bool VisitOnly;
+        private bool VisitCompleted;
+
+        public UINeighborhoodSelectionPanel(ushort mode, bool visitOnly = false)
         {
+            VisitOnly = visitOnly;
             Provider = Content.Get().TS1Global;
             PopulateScreen(mode);
+            if (VisitOnly)
+            {
+                var cancel = new UIBigButton(false) { Caption = "Cancel", Position = new Vector2(24, 520), ScaleX = 0.5f, ScaleY = 0.5f };
+                cancel.OnButtonClick += b => SelectHouse(0);
+                Add(cancel);
+            }
             GameResized();
         }
 
@@ -180,6 +191,7 @@ namespace Simitone.Client.UI.Panels
                 var loc = locations.GetString(i).Split(',');
                 var num = int.Parse(loc[0].TrimStart());
                 if (num == 99) continue;
+                if (VisitOnly && mode == 4 && (!Content.Get().Neighborhood.ZoningDictionary.TryGetValue((short)num, out var zone) || zone <= 0)) continue;
                 var button = new UINeighborhoodHouseButton(num, SelectHouse, config.Scale);
                 button.Position = new Vector2(int.Parse(loc[1].TrimStart()), int.Parse(loc[2].TrimStart()));
                 HousePositions[num] = button.Position;
@@ -222,6 +234,15 @@ namespace Simitone.Client.UI.Panels
 
         public void SelectHouse(int house)
         {
+            if (VisitOnly)
+            {
+                if (VisitCompleted) return;
+                if (house != 0 && (!HousePositions.ContainsKey(house) ||
+                    (Mode == 4 && (!Content.Get().Neighborhood.ZoningDictionary.TryGetValue((short)house, out var zone) || zone <= 0)))) return;
+                VisitCompleted = true;
+                OnHouseSelect?.Invoke(house);
+                return;
+            }
             if (LastHS != null && LastHS.HouseID == house)
             {
                 ResetZoom();
@@ -259,6 +280,7 @@ namespace Simitone.Client.UI.Panels
         public override void Update(UpdateState state)
         {
             base.Update(state);
+            if (VisitOnly && state.NewKeys.Contains(Keys.Escape)) SelectHouse(0);
         }
     }
 

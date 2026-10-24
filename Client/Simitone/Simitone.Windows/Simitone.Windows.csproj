@@ -9,19 +9,18 @@
     <AssemblyName>Simitone</AssemblyName>
     <FileAlignment>512</FileAlignment>
     <ApplicationIcon>Icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Icon.bmp">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </EmbeddedResource>
     <Content Include="Icon.ico" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.4" />
     <PackageReference Include="MonoGame.Framework.WindowsDX" Version="3.8.4" />
+    <PackageReference Include="Eto.Platform.Wpf" Version="2.8.4" />
   </ItemGroup>
 
   <ItemGroup>
@@ -35,6 +34,7 @@
     <ProjectReference Include="..\..\..\FreeSO\TSOClient\tso.simantics\FSO.SimAntics.csproj" />
     <ProjectReference Include="..\..\..\FreeSO\TSOClient\tso.world\FSO.LotView.csproj" />
     <ProjectReference Include="..\Simitone.Client\Simitone.Client.csproj" />
+    <ProjectReference Include="..\Simitone.Shared\Simitone.Shared.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

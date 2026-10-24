@@ -1,4 +1,4 @@
-﻿/*
+/*
 This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 If a copy of the MPL was not distributed with this file, You can obtain one at
 http://mozilla.org/MPL/2.0/.
@@ -97,6 +97,10 @@ namespace Simitone.Client.UI.Panels
         // If we are to implement controlling multiple sims, this must be changed.
         private UIMobileDialog BlockingDialog;
         private UINeighborhoodSelectionPanel TS1NeighSelector;
+        private uint TravelDialogActor;
+        private bool TravelBackgroundVisible;
+        private bool TravelFrontendVisible;
+        private bool TravelLotVisible;
         private ulong LastDialogID;
 
         private static uint GOTO_GUID = 0x000007C4;
@@ -245,10 +249,18 @@ namespace Simitone.Client.UI.Panels
                 case VMDialogType.TS1Neighborhood:
                 case VMDialogType.TS1StudioTown:
                 case VMDialogType.TS1Magictown:
-                    TS1NeighSelector = new UINeighborhoodSelectionPanel((ushort)VMDialogPrivateStrings.TypeToNeighID[type]);
+                    if (TS1NeighSelector != null) return;
+                    var travelScreen = (TS1GameScreen)Parent;
+                    TravelDialogActor = info.Caller.PersistID;
+                    TravelBackgroundVisible = travelScreen.Bg.Visible;
+                    TravelFrontendVisible = travelScreen.Frontend.Visible;
+                    TravelLotVisible = Visible;
+                    var region = (ushort)VMDialogPrivateStrings.TypeToNeighID[type];
+                    TS1NeighSelector = new UINeighborhoodSelectionPanel(region, region == 2 || region == 4);
                     Parent.Add(TS1NeighSelector);
                     ((TS1GameScreen)Parent).Bg.Visible = true;
                     ((TS1GameScreen)Parent).LotControl.Visible = false;
+                    travelScreen.Frontend.Visible = false;
                     TS1NeighSelector.OnHouseSelect += HouseSelected;
                     return;
                 case VMDialogType.TS1PhoneBook:
@@ -315,15 +327,21 @@ namespace Simitone.Client.UI.Panels
 
         private void HouseSelected(int house)
         {
-            if (ActiveEntity == null || TS1NeighSelector == null) return;
-            vm.SendCommand(new VMNetDialogResponseCmd
+            var selector = TS1NeighSelector;
+            if (selector == null) return;
+            TS1NeighSelector = null;
+            selector.OnHouseSelect -= HouseSelected;
+            Parent.Remove(selector);
+            var screen = (TS1GameScreen)Parent;
+            screen.Bg.Visible = TravelBackgroundVisible;
+            screen.Frontend.Visible = TravelFrontendVisible;
+            Visible = TravelLotVisible;
+            vm.ForwardCommand(new VMNetDialogResponseCmd
             {
-                ActorUID = ActiveEntity.PersistID,
+                ActorUID = TravelDialogActor,
                 ResponseCode = (byte)((house > 0) ? 1 : 0),
                 ResponseText = house.ToString()
             });
-            Parent.Remove(TS1NeighSelector);
-            TS1NeighSelector = null;
         }
 
         private void DialogButton0(UIElement button) { DialogResponse(0); }
@@ -757,10 +775,51 @@ namespace Simitone.Client.UI.Panels
 
                 if (!FoundMe && ActiveEntity != null)
                 {
-                    vm.Context.World.State.CenterTile = new Vector2(ActiveEntity.VisualPosition.X, ActiveEntity.VisualPosition.Y);
+                    // Send change control command to ensure sim is properly selected
+                    // This sets PersistID, registers in ObjectQueries, sets Global 3, and centers camera
+                    vm.SendCommand(new VMNetChangeControlCmd() { TargetID = ActiveEntity.ObjectID });
+                    FoundMe = true;
+                }
+
+                // Fallback: if no sim with expected PersistID, take control of any available avatar
+                if (!FoundMe && ActiveEntity == null && vm.Context.ObjectQueries.Avatars.Count > 0)
+                {
+                    var fallbackAvatar = vm.Context.ObjectQueries.Avatars.FirstOrDefault();
+                    if (fallbackAvatar != null)
+                    {
+                        // Send change control command to properly select this sim
+                        // This sets PersistID, registers in ObjectQueries, sets Global 3, and centers camera
+                        vm.SendCommand(new VMNetChangeControlCmd() { TargetID = fallbackAvatar.ObjectID });
+                        FoundMe = true;
+                    }
+                }
+
+                // Fallback for empty lots (no avatars): center on mailbox, any placed object, or lot center
+                if (!FoundMe && vm.Context.ObjectQueries.Avatars.Count == 0)
+                {
+                    // Try to find mailbox first (GUIDs: 0xEF121974 or 0x1D95C9B0)
+                    var landmark = vm.Entities.FirstOrDefault(x => x.Object.OBJ.GUID == 0xEF121974 || x.Object.OBJ.GUID == 0x1D95C9B0);
+
+                    // If no mailbox, try to find any object that's placed on the lot (for community lots)
+                    if (landmark == null)
+                    {
+                        landmark = vm.Entities.FirstOrDefault(x => x.Position != LotTilePos.OUT_OF_WORLD && x.Position.Level == 1);
+                    }
+
+                    if (landmark != null)
+                    {
+                        vm.Context.World.State.CenterTile = new Vector2(landmark.VisualPosition.X, landmark.VisualPosition.Y);
+                    }
+                    else
+                    {
+                        // Default to lot center
+                        var lotSize = vm.Context.Architecture.Width;
+                        vm.Context.World.State.CenterTile = new Vector2(lotSize / 2f, lotSize / 2f);
+                    }
                     vm.Context.World.State.ScrollAnchor = null;
                     FoundMe = true;
                 }
+
                 Queue.QueueOwner = ActiveEntity;
             }
 
