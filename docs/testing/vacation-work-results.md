@@ -76,9 +76,9 @@ Unknown original-game eviction proceeds, object/NPC cleanup and membership seman
 The two minor review items are now fixed in code commit `a25f88ccb9a24999c7b94cb5bc36fb8ec94759c2`:
 
 - The Windows package includes everyday-gameplay-matrix.md alongside the offline guide, reference worksheet, result form and copy helper. Validation runs after all five kit files are copied and rejects any missing file.
-- Package validation now requires openal.dll and the eight SharpDX assemblies used by the pinned backends. Dependency names were checked against MonoGame.Framework.WindowsDX3.8.4's package metadata and the existing client graph.
+- Package validation now requires openal.dll and the seven SharpDX package dependencies used by the pinned backend. Dependency names were checked against MonoGame.Framework.WindowsDX3.8.4's package metadata and the existing client graph.
 - Real PowerShell fixtures reproduce acceptance of missing OpenAL and offline kit files before the fix; all missing-file checks now pass. The unchanged save-copy suite also passes. A fresh independent review found no concrete bugs.
-- The engine and application behavior are unchanged. Native run https://github.com/giannoug/Simitone/actions/runs/40201794585 is verifying the updated package; no new native pass is claimed until it completes.
+- The engine and application behavior are unchanged. First follow-up run40201794585 passed Windows build and all tests, then correctly stopped packaging because the new checker also required an unused SharpDX.D3DCompiler.dll. The pinned MonoGame package metadata and its actual assembly-reference table do not require that compiler assembly. Removed that overstrict requirement; a valid fixture without it fails before this correction and passes afterward. The next native run will verify the corrected package.
 
 The earlier local ZIP/hash and native result below remain the original batch's historical checkpoint; use the newer successful run for the complete offline kit.
 

@@ -13,7 +13,7 @@ try {
         'hostfxr.dll','hostpolicy.dll','coreclr.dll','System.Private.CoreLib.dll','PresentationFramework.dll',
         'Simitone.Client.dll','FSO.UI.dll','FSO.Content.dll','FSO.SimAntics.dll','Eto.dll','Eto.Wpf.dll','SDL2.dll','openal.dll',
         'SharpDX.dll','SharpDX.DXGI.dll','SharpDX.Direct2D1.dll','SharpDX.Direct3D11.dll',
-        'SharpDX.MediaFoundation.dll','SharpDX.XAudio2.dll','SharpDX.XInput.dll','SharpDX.D3DCompiler.dll',
+        'SharpDX.MediaFoundation.dll','SharpDX.XAudio2.dll','SharpDX.XInput.dll',
         'Monogame/Windows/MonoGame.Framework.dll','Monogame/WindowsGL/MonoGame.Framework.dll',
         'Content/cas.fsov','Content/uigraphics/ngbh/ngbh_opt.png','Content/DX/Effects/2DWorldBatch.xnb','Content/OGL/Effects/2DWorldBatch.xnb',
         'Testing/Test-SaveCopy.ps1','Testing/windows-test-guide.md','Testing/test-results-template.md',
@@ -26,7 +26,7 @@ try {
     & $checker -PackageDirectory $root
     foreach ($file in @('coreclr.dll','Monogame/Windows/MonoGame.Framework.dll','Content/cas.fsov','openal.dll',
         'SharpDX.dll','SharpDX.DXGI.dll','SharpDX.Direct2D1.dll','SharpDX.Direct3D11.dll',
-        'SharpDX.MediaFoundation.dll','SharpDX.XAudio2.dll','SharpDX.XInput.dll','SharpDX.D3DCompiler.dll',
+        'SharpDX.MediaFoundation.dll','SharpDX.XAudio2.dll','SharpDX.XInput.dll',
         'Testing/Test-SaveCopy.ps1','Testing/windows-test-guide.md','Testing/test-results-template.md',
         'Testing/household-reference.md','Testing/everyday-gameplay-matrix.md')) {
         $path = Join-Path $root $file
