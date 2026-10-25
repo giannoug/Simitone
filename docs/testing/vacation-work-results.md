@@ -39,7 +39,7 @@ Environment: Linux x64, .NET SDK9.0.319, PowerShell7.5.3. No original Sims insta
 - Windows self-contained cross-publish: exit0, with inherited legacy dependency/analyzer warnings. Both actual package validation and archive integrity checks pass.
 - Desktop Release build: exit0, 902 warnings, 0 errors. No Linux gameplay launch.
 
-Native Windows run status is recorded below separately. An edited workflow or Linux cross-build does not imply a Windows-native pass.
+Native Windows run40179106884 also completed successfully: Windows build, eleven C# check groups (including exclusive file locks), both helper suites (including a Windows junction), self-contained publish and artifact upload. This does not establish game launch or gameplay compatibility.
 
 ## Locally verified package
 
@@ -78,4 +78,8 @@ Unknown original-game eviction proceeds, object/NPC cleanup and membership seman
 
 ## Native Windows result
 
-Run40179106884 was started by the push for494fc9f. At this report checkpoint it is in progress; do not infer a pass or a downloadable artifact until its package job completes. The older run40178886407 uses the deliberately superseded graphics-check path and should not be used for the final package.
+Run40179106884 for494fc9f completed successfully on2026-10-25. Job121126113800 passed every build/check/helper/package/upload step. Native logs confirm locked-file preservation, provider checks, queued travel checks and the copy helper's link/overlap cases; no C# cases were skipped on Windows.
+
+Download from the run's **Artifacts** section: **Simitone-Windows-x64-494fc9f3c1f245ec05ecabf65c48d884da4f44d1** (artifact12593715455, 360622072bytes). GitHub artifact archive digest: `sha256:91284f4ff8f97083299ec3725878d8e76b6c48e1a143a14d61f53c402ec3a562`. Retained until2026-11-08. This outer artifact contains the inner package ZIP and its own .sha256 file; do not compare its hash with the separate locally built ZIP hash above.
+
+Logs artifact12594065262 is available on the same run. The earlier run40178886407 uses the superseded graphics-check path; use40179106884 for the final package. All user gameplay matrix cases remain NOT RUN.
