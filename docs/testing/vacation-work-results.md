@@ -71,10 +71,16 @@ Unknown original-game eviction proceeds, object/NPC cleanup and membership seman
 4. Kept inherited NU1605 explicit-RID diagnostics as warnings, clearing the SDK warning-as-error setting for packaging instead of changing the legacy dependency graph. Cost: compatibility warnings remain and native runtime testing is required.
 5. Used the current fixed Windows save root and a separate test account for existing data. Cost: extra setup for users with existing saves; no untested save-root flag was introduced.
 
-## Deferred minor review items
+## Packaging follow-up (2026-10-25)
 
-- The packaged full-pass guide points to the repository matrix; everyday-gameplay-matrix.md is not copied into the offline Testing directory.
-- The checker does not explicitly require OpenAL/SharpDX files. Actual output contains openal.dll/SharpDX dependencies; the check could detect more artificially incomplete packages.
+The two minor review items are now fixed in code commit `a25f88ccb9a24999c7b94cb5bc36fb8ec94759c2`:
+
+- The Windows package includes everyday-gameplay-matrix.md alongside the offline guide, reference worksheet, result form and copy helper. Validation runs after all five kit files are copied and rejects any missing file.
+- Package validation now requires openal.dll and the eight SharpDX assemblies used by the pinned backends. Dependency names were checked against MonoGame.Framework.WindowsDX3.8.4's package metadata and the existing client graph.
+- Real PowerShell fixtures reproduce acceptance of missing OpenAL and offline kit files before the fix; all missing-file checks now pass. The unchanged save-copy suite also passes. A fresh independent review found no concrete bugs.
+- The engine and application behavior are unchanged. Native run https://github.com/giannoug/Simitone/actions/runs/40201794585 is verifying the updated package; no new native pass is claimed until it completes.
+
+The earlier local ZIP/hash and native result below remain the original batch's historical checkpoint; use the newer successful run for the complete offline kit.
 
 ## Native Windows result
 
