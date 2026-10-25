@@ -410,21 +410,17 @@ namespace Simitone.Client.UI.Screens
                 //stub smooth zoom?
             }
 
-            if (SwitchLot > 0)
+            if (SwitchLot > 0 && !TrySwitchLot(out var travelError))
             {
-                if (!Downtown) SavedLot = vm.Save();
-                if (SwitchLot == ActiveFamily.HouseNumber && SavedLot != null)
+                vm.SpeedMultiplier = TravelSpeedBeforeSwitch;
+                UIMobileAlert alert = null;
+                alert = new UIMobileAlert(new UIAlertOptions
                 {
-                    Downtown = false;
-                    InitializeLot(SavedLot);
-                    SavedLot = null;
-                }
-                else
-                {
-                    Downtown = true;
-                    InitializeLot(Content.Get().Neighborhood.GetHousePath(SwitchLot), false);
-                }
-                SwitchLot = -1;
+                    Title = "Unable to travel",
+                    Message = travelError,
+                    Buttons = UIAlertButton.Ok(b => alert.Close())
+                });
+                GlobalShowDialog(alert, true);
             }
             //vm.Context.Clock.Hours = 12;
             if (vm != null) vm.Update();
@@ -471,6 +467,60 @@ namespace Simitone.Client.UI.Screens
         }
 
         private VMMarshal SavedLot;
+        private short SavedHomeLot;
+        private string SavedHomeUserPath;
+        private int TravelSpeedBeforeSwitch;
+
+        private bool TrySwitchLot(out string error)
+        {
+            var target = SwitchLot;
+            SwitchLot = -1; // Consume once, including rejected requests.
+            error = null;
+            if (target <= 0) return true;
+            var provider = Content.Get().Neighborhood;
+            if (ActiveFamily == null)
+            {
+                error = "There is no active household for this trip.";
+                return false;
+            }
+            if (SavedLot != null && (ActiveFamily.HouseNumber != SavedHomeLot ||
+                !string.Equals(Path.GetFullPath(provider.UserPath), SavedHomeUserPath,
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+            {
+                error = "The saved home belongs to a different household home or neighborhood. The trip has not been changed.";
+                return false;
+            }
+            if (target == ActiveFamily.HouseNumber)
+            {
+                if (SavedLot == null)
+                {
+                    if (!Downtown) return true;
+                    error = "The live home snapshot is missing. Returning from this trip cannot safely continue.";
+                    return false;
+                }
+                InitializeLot(SavedLot);
+                Downtown = false;
+                SavedLot = null;
+                SavedHomeLot = 0;
+                SavedHomeUserPath = null;
+                return true;
+            }
+            var destination = provider.GetHousePath(target);
+            if (!File.Exists(destination))
+            {
+                error = "The selected destination lot file is missing. The trip has not been changed.";
+                return false;
+            }
+            if (!Downtown && SavedLot == null)
+            {
+                SavedLot = vm.Save();
+                SavedHomeLot = (short)ActiveFamily.HouseNumber;
+                SavedHomeUserPath = Path.GetFullPath(provider.UserPath);
+            }
+            Downtown = true;
+            InitializeLot(destination, false);
+            return true;
+        }
 
         public void InitializeLot()
         {
@@ -758,6 +808,8 @@ namespace Simitone.Client.UI.Screens
 
         private void VMLotSwitch(uint lotId)
         {
+            if (SwitchLot > 0) return;
+            TravelSpeedBeforeSwitch = vm.SpeedMultiplier;
             vm.SpeedMultiplier = 0;
             if ((short)lotId == -1)
             {
@@ -945,6 +997,9 @@ namespace Simitone.Client.UI.Screens
             NeighSelection(CurrentNeighborhoodMode);
             Downtown = false;
             SavedLot = null;
+            SavedHomeLot = 0;
+            SavedHomeUserPath = null;
+            SwitchLot = -1;
         }
     }
 

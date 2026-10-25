@@ -87,6 +87,8 @@ try
         Require(family.Budget == 100 && family.HouseNumber == 0 && ReferenceEquals(neighbors.FamilyForHouse[2], occupant),
             "Moving into an occupied lot changed the buyer or current occupants.");
         screen.MoveInAndPlay(1, 999, null);
+        screen.MoveInAndPlay(1, -1, null);
+        screen.MoveInAndPlay(1, 65536, null);
         Require(family.FamilyGUIDs.SequenceEqual(new uint[] { 7, 9 }), "A rejected household operation changed membership.");
         var selector = (UINeighborhoodSelectionPanel)RuntimeHelpers.GetUninitializedObject(typeof(UINeighborhoodSelectionPanel));
         var selectorFlags = BindingFlags.NonPublic | BindingFlags.Instance;
@@ -174,14 +176,21 @@ try
     var afterResize = new GlobalSettings(settings.ActivePath);
     Require(afterResize.GraphicsWidth == 1920 && afterResize.GraphicsHeight == 1080,
         "A later save overwrote the accepted restart-only display choice.");
+    var reopened = optionsType.GetMethod("ReadSettings", fields)!.Invoke(options, null)!;
+    Require((int)draftType.GetProperty("Width")!.GetValue(reopened)! == 1920,
+        "Reopening options lost the pending display selection.");
+    invalid.PendingDisplayOptions = (1600, 900, false);
     SetOption("Settings", invalid);
     Draft(3);
     Require(!Apply() && invalid.FXVolume == 10 && invalid.MusicVolume == 10, "Failed Apply did not restore prior live settings.");
+    Require(invalid.PendingDisplayOptions == (1600, 900, false), "Failed Apply discarded an earlier pending display choice.");
     typeof(TS1GameScreen).GetField("OptionsDialog", fields)!.SetValue(screen, options);
     screen.vm.SpeedMultiplier = 0;
     screen.ChangeSpeedTo(1);
     Require(screen.vm.SpeedMultiplier == 0, "Typing an options number resumed the simulation.");
     Console.WriteLine("PASS: options drafts validate, persist on Apply, and roll back live values on write failure");
+    ProviderChecks.Run(root);
+    TravelChecks.Run(root);
     return 0;
 }
 finally

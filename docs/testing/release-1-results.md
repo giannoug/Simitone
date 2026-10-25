@@ -1,5 +1,7 @@
 # Everyday gameplay implementation checkpoint
 
+Historical results recorded before publication. See vacation-work-results.md for the later batch. Published baseline: parent 1409435 and engine e417cd4; these preserve the earlier tested trees with consolidated upload history.
+
 Date: 2026-10-24. Status: **implementation checkpoint, not a validated release**.
 
 The approved Windows gameplay release gate has not run. There is no original-game installation, disposable save fixture, or Windows runtime in this workspace. All B01–B08, H01–H07, T01–T06 and O01–O06 manual matrix cases remain NOT RUN. No gameplay, edition compatibility, rendered layout, DPI, source-save hash, package launch, inventory, relationship or money round-trip result is implied by the checks below.

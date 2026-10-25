@@ -1,6 +1,8 @@
 name: Build Simitone
 
 on:
+  push:
+    branches: [feat/everyday-gameplay]
   workflow_dispatch:
     inputs:
       configuration:
@@ -26,7 +28,7 @@ on:
 
 jobs:
   build-windows:
-    if: ${{ inputs.build_windows }}
+    if: ${{ github.event_name == 'push' || inputs.build_windows }}
     runs-on: windows-latest
     name: Build Windows
 
@@ -41,39 +43,47 @@ jobs:
       with:
         dotnet-version: '9.0.x'
 
-    - name: Run Protobuild
-      shell: pwsh
-      run: |
-        cd FreeSO/Other/libs/FSOMonoGame/
-        ./protobuild.exe --generate
-      continue-on-error: true
-
-    - name: Restore Simitone dependencies
-      run: dotnet restore Client/Simitone/Simitone.sln
-
-    - name: Restore FreeSO dependencies
-      run: dotnet restore FreeSO/TSOClient/FreeSO.sln
-      continue-on-error: true
-
-    - name: Restore Roslyn dependencies
-      shell: pwsh
-      run: |
-        cd FreeSO/TSOClient/FSO.SimAntics.JIT.Roslyn/
-        dotnet restore
-      continue-on-error: true
-
     - name: Build Windows
-      run: dotnet build Client/Simitone/Simitone.Windows/Simitone.Windows.csproj -c ${{ inputs.configuration || 'Release' }} --no-restore
+      shell: pwsh
+      run: |
+        dotnet build Client/Simitone/Simitone.Windows/Simitone.Windows.csproj -c ${{ inputs.configuration || 'Release' }} -m:1 2>&1 | Tee-Object windows-build.log
+        if ($LASTEXITCODE -ne 0) { throw 'Windows build failed.' }
 
     - name: Check persistence and UI command guards
-      run: dotnet run --project Tests/Simitone.Checks/Simitone.Checks.csproj -c ${{ inputs.configuration || 'Release' }}
+      shell: pwsh
+      run: |
+        dotnet run --project Tests/Simitone.Checks/Simitone.Checks.csproj -c ${{ inputs.configuration || 'Release' }} -p:BuildInParallel=false 2>&1 | Tee-Object windows-checks.log
+        if ($LASTEXITCODE -ne 0) { throw 'Production checks failed.' }
 
-    - name: Upload Windows artifacts
+    - name: Check package and save-copy helpers
+      shell: pwsh
+      run: |
+        ./Tests/Check-WindowsPackage.ps1
+        ./Tests/Test-SaveCopy.ps1
+
+    - name: Package Windows x64
+      shell: pwsh
+      run: |
+        ./scripts/Package-Windows.ps1 -OutputDirectory '${{ runner.temp }}/simitone-package' -Configuration '${{ inputs.configuration || 'Release' }}' 2>&1 | Tee-Object windows-package.log
+
+    - name: Upload Windows test package
       uses: actions/upload-artifact@v4
       with:
-        name: Simitone-Windows-${{ inputs.configuration || 'Release' }}
-        path: Client/Simitone/Simitone.Windows/bin/${{ inputs.configuration || 'Release' }}/net9.0-windows/
+        name: Simitone-Windows-x64-${{ github.sha }}
+        path: |
+          ${{ runner.temp }}/simitone-package/*.zip
+          ${{ runner.temp }}/simitone-package/*.sha256
+        retention-days: 14
         if-no-files-found: error
+
+    - name: Upload validation logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: Windows-logs-${{ github.sha }}
+        path: windows-*.log
+        retention-days: 14
+        if-no-files-found: warn
 
   build-linux:
     if: ${{ inputs.build_linux }}

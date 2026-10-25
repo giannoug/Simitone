@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0-windows</TargetFramework>
@@ -59,4 +59,22 @@
     <Copy SourceFiles="@(MGDesktopGL)" DestinationFolder="$(OutputPath)Monogame\WindowsGL" SkipUnchangedFiles="true" />
   </Target>
 
+  <Target Name="RemoveNonClientPublishFiles" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <!-- Referenced server entry-point metadata is not part of the client entry point. -->
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="'%(RelativePath)' == 'watchdog.runtimeconfig.json' or '%(RelativePath)' == 'watchdog.deps.json' or '%(RelativePath)' == 'FSO.Server.Api.Core.runtimeconfig.json' or '%(RelativePath)' == 'FSO.Server.Api.Core.deps.json'" />
+      <!-- Prefer the frontend texture at this shared output destination. -->
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="$([System.String]::Copy('%(Identity)').Replace('\','/').EndsWith('/tso.content/Content/3D/TEX_1.png'))" />
+    </ItemGroup>
+  </Target>
+  <Target Name="CopyRendererPublishFiles" AfterTargets="Publish">
+    <ItemGroup>
+      <PublishDX Include="$(NuGetGlobalPackages)/monogame.framework.windowsdx/3.8.4/lib/*/MonoGame.Framework.dll" />
+      <PublishGL Include="$(NuGetGlobalPackages)/monogame.framework.desktopgl/3.8.4/lib/*/MonoGame.Framework.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PublishDX)" DestinationFolder="$(PublishDir)Monogame/Windows" />
+    <Copy SourceFiles="@(PublishGL)" DestinationFolder="$(PublishDir)Monogame/WindowsGL" />
+  </Target>
 </Project>
