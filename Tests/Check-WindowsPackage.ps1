@@ -13,7 +13,7 @@ try {
         'hostfxr.dll','hostpolicy.dll','coreclr.dll','System.Private.CoreLib.dll','PresentationFramework.dll',
         'Simitone.Client.dll','FSO.UI.dll','FSO.Content.dll','FSO.SimAntics.dll','Eto.dll','Eto.Wpf.dll','SDL2.dll',
         'Monogame/Windows/MonoGame.Framework.dll','Monogame/WindowsGL/MonoGame.Framework.dll',
-        'Content/cas.fsov','Content/uigraphics/ngbh_opt.png','Content/DX/Effects/2DWorldBatch.xnb','Content/OGL/Effects/2DWorldBatch.xnb')
+        'Content/cas.fsov','Content/uigraphics/ngbh/ngbh_opt.png','Content/DX/Effects/2DWorldBatch.xnb','Content/OGL/Effects/2DWorldBatch.xnb')
     foreach ($file in $required) {
         $path = Join-Path $root $file
         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path)) | Out-Null
