@@ -10,13 +10,13 @@ try {
     # Keep inherited legacy-package downgrade diagnostics visible without converting them to restore errors.
     & dotnet publish Client/Simitone/Simitone.Windows/Simitone.Windows.csproj -c $Configuration -r win-x64 --self-contained true -p:EnableWindowsTargeting=true -p:PublishSingleFile=false -p:PublishTrimmed=false '-p:WarningsAsErrors=' -p:WarningsNotAsErrors=NU1605 -m:1 -nr:false -o $package
     if ($LASTEXITCODE -ne 0) { throw "Windows publish failed ($LASTEXITCODE)." }
-    & (Join-Path $PSScriptRoot 'Check-WindowsPackage.ps1') -PackageDirectory $package
     $kit = Join-Path $package 'Testing'
     New-Item -ItemType Directory $kit | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Test-SaveCopy.ps1') -Destination $kit
-    foreach ($file in @('windows-test-guide.md','test-results-template.md','household-reference.md')) {
+    foreach ($file in @('windows-test-guide.md','test-results-template.md','household-reference.md','everyday-gameplay-matrix.md')) {
         Copy-Item -LiteralPath (Join-Path $repo "docs/testing/$file") -Destination $kit
     }
+    & (Join-Path $PSScriptRoot 'Check-WindowsPackage.ps1') -PackageDirectory $package
     $parentRevision = (& git rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read parent revision.' }
     $engineRevision = (& git -C FreeSO rev-parse HEAD).Trim()
