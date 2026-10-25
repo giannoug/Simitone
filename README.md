@@ -13,6 +13,8 @@ NOTE! Currently does not support the entire Fame career track, saving on vacatio
 
 # Everyday gameplay development branch
 
+Current batch: [results and remaining tests](docs/testing/vacation-work-results.md), [Windows test guide](docs/testing/windows-test-guide.md), and [Windows build artifacts](https://github.com/giannoug/Simitone/actions).
+
 This branch adds guarded saves, household stale-state checks, draft-based audio/display options and ordinary community-destination selection. The package-free checks pass on Linux; Windows gameplay and original-game compatibility remain unverified. Full eviction cleanup and robust home-snapshot restore work are still pending. See [implementation results and remaining work](docs/testing/release-1-results.md) and the [manual test matrix](docs/testing/everyday-gameplay-matrix.md).
 
 # Purpose
