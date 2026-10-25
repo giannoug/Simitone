@@ -5,13 +5,13 @@ Date: 2026-10-25 (Europe/Budapest). Status: development test checkpoint; manual 
 ## Where the work is
 
 - Parent branch: https://github.com/giannoug/Simitone/tree/feat/everyday-gameplay
-- Tested code upload: `494fc9f3c1f245ec05ecabf65c48d884da4f44d1`.
+- Initial tested code upload: `494fc9f3c1f245ec05ecabf65c48d884da4f44d1`.
 - Engine branch: https://github.com/giannoug/FreeSO/tree/feat/simitone-everyday-gameplay
 - Engine upload: `62ebb08149aaf65375ba2aa1dd5c3f627771d718`.
-- Current Windows workflow run: https://github.com/giannoug/Simitone/actions/runs/40179106884
+- Current Windows workflow run: https://github.com/giannoug/Simitone/actions/runs/40202486521
 - User instructions: [Windows test guide](windows-test-guide.md), [result form](test-results-template.md), [full matrix](everyday-gameplay-matrix.md), [original-game reference worksheet](household-reference.md).
 
-The GitHub connector creates consolidated upload commits. The local source checkpoint `089e4de0a685246222aa099d69192c71d8d379d0` and engine `e360d1555b567b7417449dcf9c73fda21f5d506b` have the same file contents as the code uploads above, apart from the parent gitlink identifying the equivalent uploaded engine commit. Tree hashes were checked during upload. Default branches, upstream PRs and releases were left unchanged.
+The GitHub connector creates consolidated upload commits. The local source checkpoint `089e4de0a685246222aa099d69192c71d8d379d0` and engine `e360d1555b567b7417449dcf9c73fda21f5d506b` have the same file contents as the initial code uploads above, apart from the parent gitlink identifying the equivalent uploaded engine commit. Tree hashes were checked during upload. Default branches, upstream PRs and releases were left unchanged.
 
 ## Completed work
 
@@ -24,7 +24,7 @@ The GitHub connector creates consolidated upload commits. The local source check
 | Travel guards | First home snapshot retains lot/folder ownership. Wrong ownership or missing destination fails before world teardown. Requests are consumed once, first snapshot is not replaced, and prevalidation rejection restores the prior speed. |
 | Household/options checks | Invalid family ID boundaries, existing stale/occupied guards, pending display reopen and failed Apply preservation covered; retained behavior passes. Unknown game money/cleanup outcomes remain blank in reference worksheet. |
 | Test kit | Explicit disposable copy, unchanged-source hashes, overlap/existing-output/link rejection, empty-directory preservation, quick/full guides and result form. No upload of user data. |
-| Independent review | No confirmed Critical/Important issues in source review. Two minor items below remain deferred. |
+| Independent review | No confirmed Critical/Important issues in source review. The two minor items were resolved in the packaging follow-up below. |
 
 ## Automated verification
 
@@ -73,16 +73,18 @@ Unknown original-game eviction proceeds, object/NPC cleanup and membership seman
 
 ## Packaging follow-up (2026-10-25)
 
-The two minor review items are now fixed in code commit `a25f88ccb9a24999c7b94cb5bc36fb8ec94759c2`:
+The two minor review items are now fixed in code commit `665c4fdba2a7aa4ec51d7cc3be0fa6a3d58ecb1b`:
 
 - The Windows package includes everyday-gameplay-matrix.md alongside the offline guide, reference worksheet, result form and copy helper. Validation runs after all five kit files are copied and rejects any missing file.
 - Package validation now requires openal.dll and the seven SharpDX package dependencies used by the pinned backend. Dependency names were checked against MonoGame.Framework.WindowsDX3.8.4's package metadata and the existing client graph.
 - Real PowerShell fixtures reproduce acceptance of missing OpenAL and offline kit files before the fix; all missing-file checks now pass. The unchanged save-copy suite also passes. A fresh independent review found no concrete bugs.
-- The engine and application behavior are unchanged. First follow-up run40201794585 passed Windows build and all tests, then correctly stopped packaging because the new checker also required an unused SharpDX.D3DCompiler.dll. The pinned MonoGame package metadata and its actual assembly-reference table do not require that compiler assembly. Removed that overstrict requirement; a valid fixture without it fails before this correction and passes afterward. The next native run will verify the corrected package.
+- The engine and application behavior are unchanged. First follow-up run40201794585 passed Windows build and all tests, then correctly stopped packaging because the new checker also required an unused SharpDX.D3DCompiler.dll. The pinned MonoGame package metadata and its actual assembly-reference table do not require that compiler assembly. Removed that overstrict requirement; a valid fixture without it fails before this correction and passes afterward. Corrected run40202486521 now passes Windows build, all eleven C# check groups, both helper suites, real package validation and ZIP upload.
 
-The earlier local ZIP/hash and native result below remain the original batch's historical checkpoint; use the newer successful run for the complete offline kit.
+Download the complete offline-kit package from https://github.com/giannoug/Simitone/actions/runs/40202486521 under **Artifacts**: **Simitone-Windows-x64-665c4fdba2a7aa4ec51d7cc3be0fa6a3d58ecb1b**, artifact12602815594. Its GitHub archive is360623454bytes; digest `sha256:2ccd8f4ffa1ed0bb56d812cd4dba9f336947087990ad0ccdf6a7bdc6c7bf1a14`; retained until2026-11-08. The artifact contains the inner package ZIP and its own SHA256 file.
 
-## Native Windows result
+The earlier local ZIP/hash and native result below remain the original batch's historical checkpoint. No packaging review items remain deferred. Manual game launch/gameplay tests remain NOT RUN.
+
+## Original batch native Windows result
 
 Run40179106884 for494fc9f completed successfully on2026-10-25. Job121126113800 passed every build/check/helper/package/upload step. Native logs confirm locked-file preservation, provider checks, queued travel checks and the copy helper's link/overlap cases; no C# cases were skipped on Windows.
 
